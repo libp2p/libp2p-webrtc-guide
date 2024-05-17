@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Browser to Browser Connectivity with js-libp2p</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module" defer src="./index.js"></script>
+  </head>
+  <body class="bg-gray-100 text-gray-900 font-sans leading-relaxed">
+    <main class="container mx-auto p-6 bg-white shadow-md rounded-lg mt-10">
+      <h1 class="font-bold text-2xl text-blue-600 mb-4">Browser to Browser Connectivity with js-libp2p</h1>
+
+      <ul class="list-disc list-inside mb-6">
+        <li>
+          Opened sessions in the last <span id="output-webtransport-opened-per-unit">0s</span>:
+          <span id="output-webtransport-opened-per-minute">0</span>
+        </li>
+        <li>
+          Max opened connections per minute: <span id="output-webtransport-max-opened-per-minute">0</span>
+        </li>
+        <li>
+          Totals:
+          <ul class="list-disc list-inside ml-6">
+            <li>Success: <span id="output-webtransport-success">0</span></li>
+            <li>Ready error: <span id="output-webtransport-ready-error">0</span></li>
+            <li>Noise error: <span id="output-webtransport-noise-error">0</span></li>
+            <li>Upgrade error: <span id="output-webtranspolrt-upgrade-error">0</span></li>
+            <li>Ready timeout: <span id="output-webtransport-ready-timeout">0</span></li>
+            <li>Noise timeout: <span id="output-webtransport-noise-timeout">0</span></li>
+            <li>Failure rate: <span id="output-webtransport-failure-rate">0</span></li>
+          </ul>
+        </li>
+      </ul>
+
+      <section class="my-6">
+        <h2 class="font-bold text-xl text-blue-600 mb-2">Node</h2>
+        <ul class="list-disc list-inside ml-4">
+          <li>Peer ID: <span id="output-node-peer-id">Unknown</span></li>
+          <li>Status: <span id="output-node-status">Initialising</span></li>
+          <li>
+            Connections: <span id="output-peer-count">0</span>
+            <ul class="list-disc list-inside ml-6" id="output-peer-types"></ul>
+          </li>
+          <li>
+            Addresses: <span id="output-address-count">0</span>
+            <ul class="list-disc list-inside ml-6" id="output-addresses"></ul>
+          </li>
+        </ul>
+      </section>
+
+      <section class="my-6">
+        <h2 class="font-bold text-xl text-blue-600 mb-2">Peers</h2>
+        <p>
+          <label class="block text-gray-700 text-sm font-bold mb-2" for="input-multiaddr">multiaddr</label>
+          <input
+            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            id="input-multiaddr"
+            type="text"
+            placeholder="/ip4/..."
+            />
+            <button
+            class="bg-green-500 hover:bg-green-700 text-white font-bold my-2 py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+            id="button-connect"
+            type="button"
+          >
+            Connect
+          </button>
+        </p>
+
+        <ul class="list-disc list-inside ml-4" id="output-peer-details"></ul>
+      </section>
+
+      <h2 class="font-bold text-xl text-blue-600 mb-2">Query</h2>
+      <pre class="bg-gray-100 p-4 rounded shadow-inner" id="output-query"></pre>
+
+      <hr class="my-6 border-gray-300" />
+    </main>
+  </body>
+</html>

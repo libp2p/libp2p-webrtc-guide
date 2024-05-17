@@ -1,0 +1,49 @@
+{
+  "name": "libp2p-browser-guide",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "How many WebTransport sessions are opened",
+  "license": "ISC",
+  "scripts": {
+    "clean": "rimraf ./dist",
+    "build:dev": "mkdir -p dist && ln -fs ../src/index.html dist/index.html",
+    "build": "mkdir -p dist && cp src/index.html dist/index.html && node ./esbuild.js",
+    "start": "npm run build:dev && esbuild src/index.js --serve --sourcemap --bundle --outdir=dist --servedir=dist"
+  },
+  "browserslist": "last 1 Chrome version",
+  "devDependencies": {
+    "esbuild": "^0.19.3",
+    "rimraf": "^5.0.0"
+  },
+  "eslintConfig": {
+    "extends": "ipfs",
+    "parserOptions": {
+      "sourceType": "module"
+    }
+  },
+  "dependencies": {
+    "@chainsafe/libp2p-gossipsub": "^13.0.0",
+    "@chainsafe/libp2p-noise": "^15.0.0",
+    "@chainsafe/libp2p-yamux": "^6.0.2",
+    "@headlessui/react": "^2.0.1",
+    "@helia/delegated-routing-v1-http-api-client": "^3.0.1",
+    "@libp2p/bootstrap": "^10.0.22",
+    "@libp2p/circuit-relay-v2": "^1.0.22",
+    "@libp2p/identify": "^2.0.0",
+    "@libp2p/interface-pubsub": "^4.0.1",
+    "@libp2p/logger": "^4.0.10",
+    "@libp2p/pubsub-peer-discovery": "^10.0.2",
+    "@libp2p/webrtc": "^4.0.31",
+    "@libp2p/websockets": "^8.0.22",
+    "@libp2p/webtransport": "^4.0.30",
+    "@multiformats/multiaddr": "^12.2.1",
+    "libp2p": "^1.5.1",
+    "@libp2p/peer-id-factory": "^3.0.3",
+    "@libp2p/simple-metrics": "^1.0.0",
+    "@multiformats/multiaddr-matcher": "^1.0.1",
+    "date-fns": "^2.30.0",
+    "helia": "^2.0.2",
+    "pretty-ms": "^8.0.0"
+  }
+}
