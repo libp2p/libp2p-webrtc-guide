@@ -14,5 +14,3 @@ playwright-report
 .parcel-cache
 .envrc
 .tool-versions
-identity.key
-bootstrapper
