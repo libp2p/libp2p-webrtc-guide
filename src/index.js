@@ -1,15 +1,10 @@
 // @ts-check
 import { WebRTC, WebSockets, WebSocketsSecure, WebTransport, Circuit } from '@multiformats/multiaddr-matcher'
-import { devToolsMetrics } from '@libp2p/devtools-metrics'
-import { createDelegatedRoutingV1HttpApiClient } from '@helia/delegated-routing-v1-http-api-client'
 import { createLibp2p } from 'libp2p'
 import { identify } from '@libp2p/identify'
-import { peerIdFromString } from '@libp2p/peer-id'
 import { noise } from '@chainsafe/libp2p-noise'
 import { yamux } from '@chainsafe/libp2p-yamux'
-import { bootstrap } from '@libp2p/bootstrap'
 import { multiaddr } from '@multiformats/multiaddr'
-import { sha256 } from 'multiformats/hashes/sha2'
 import { gossipsub } from '@chainsafe/libp2p-gossipsub'
 import { webSockets } from '@libp2p/websockets'
 import { webTransport } from '@libp2p/webtransport'
@@ -56,7 +51,6 @@ const App = async () => {
       pubsubPeerDiscovery({
         interval: 10_000,
         topics: [PUBSUB_PEER_DISCOVERY],
-        listenOnly: false,
       }),
     ],
     services: {
@@ -64,9 +58,6 @@ const App = async () => {
         allowPublishToZeroTopicPeers: true,
         ignoreDuplicatePublishError: true,
       }),
-      // Delegated routing helps us discover the circuit relays
-      // This relies on the public delegated routing endpoint https://docs.ipfs.tech/concepts/public-utilities/#delegated-routing
-      // delegatedRouting: () => createDelegatedRoutingV1HttpApiClient('https://delegated-ipfs.dev'),
       identify: identify(),
     },
   })

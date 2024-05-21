@@ -27,7 +27,6 @@
     "@chainsafe/libp2p-noise": "^15.0.0",
     "@chainsafe/libp2p-yamux": "^6.0.2",
     "@headlessui/react": "^2.0.3",
-    "@helia/delegated-routing-v1-http-api-client": "^3.0.1",
     "@libp2p/bootstrap": "^10.0.24",
     "@libp2p/circuit-relay-v2": "^1.0.24",
     "@libp2p/devtools-metrics": "^0.0.1",
