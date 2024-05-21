@@ -15,38 +15,12 @@ import { webSockets } from '@libp2p/websockets'
 import { webTransport } from '@libp2p/webtransport'
 import { webRTC, webRTCDirect } from '@libp2p/webrtc'
 import { circuitRelayTransport } from '@libp2p/circuit-relay-v2'
+import { enable, disable } from '@libp2p/logger'
 import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery'
 import { protocols } from '@multiformats/multiaddr'
-import prettyMs from 'pretty-ms'
-
-// peer ids of known bootstrap nodes
-const bootstrapPeers = [
-  'QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN',
-  'QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa',
-  'QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb',
-  'QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt',
-  'QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ',
-  'QmZa1sAxajnQjVM8WjWXoMbmPd7NsWhfKsPkErzpm9wGkp',
-]
-
-// let queryController = new AbortController()
+import { PUBSUB_PEER_DISCOVERY, bootstrapPeers } from './constants'
 
 const App = async () => {
-  const DOM = {
-    nodePeerId: () => document.getElementById('output-node-peer-id'),
-    nodeStatus: () => document.getElementById('output-node-status'),
-    nodePeerCount: () => document.getElementById('output-peer-count'),
-    nodePeerTypes: () => document.getElementById('output-peer-types'),
-    nodePeerDetails: () => document.getElementById('output-peer-details'),
-    nodeAddressCount: () => document.getElementById('output-address-count'),
-    nodeAddresses: () => document.getElementById('output-addresses'),
-
-    inputMultiaddr: () => document.getElementById('input-multiaddr'),
-    connectButton: () => document.getElementById('button-connect'),
-    // queryButton: () => document.getElementById('button-run-query'),
-    outputQuery: () => document.getElementById('output-query'),
-  }
-
   const libp2p = await createLibp2p({
     addresses: {
       listen: [
@@ -54,7 +28,6 @@ const App = async () => {
         '/webrtc',
       ],
     },
-    metrics: devToolsMetrics(),
     transports: [
       webSockets(),
       webTransport(),
@@ -70,14 +43,9 @@ const App = async () => {
       }),
       // 👇 Required to create circuit relay reservations in order to hole punch browser-to-browser WebRTC connections
       circuitRelayTransport({
-        // When set to >0, this will look up the rendezvous CID in order to discover circuit relay peers it can create a reservation with
-        discoverRelays: 5,
+        discoverRelays: 2,
       }),
     ],
-    connectionManager: {
-      maxConnections: 30,
-      minConnections: 5,
-    },
     connectionEncryption: [noise()],
     streamMuxers: [yamux()],
     connectionGater: {
@@ -85,16 +53,10 @@ const App = async () => {
       denyDialMultiaddr: async () => false,
     },
     peerDiscovery: [
-      // pubsubPeerDiscovery({
-      //   interval: 10_000,
-      //   topics: [PUBSUB_PEER_DISCOVERY],
-      //   listenOnly: false,
-      // }),
-      bootstrap({
-        list: [
-          '/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN',
-          '/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb',
-        ],
+      pubsubPeerDiscovery({
+        interval: 10_000,
+        topics: [PUBSUB_PEER_DISCOVERY],
+        listenOnly: false,
       }),
     ],
     services: {
@@ -102,12 +64,28 @@ const App = async () => {
         allowPublishToZeroTopicPeers: true,
         ignoreDuplicatePublishError: true,
       }),
-      // // Delegated routing helps us discover the ephemeral multiaddrs of the dedicated go and rust bootstrap peers
-      // // This relies on the public delegated routing endpoint https://docs.ipfs.tech/concepts/public-utilities/#delegated-routing
-      // delegatedRouting: () => delegatedClient,
+      // Delegated routing helps us discover the circuit relays
+      // This relies on the public delegated routing endpoint https://docs.ipfs.tech/concepts/public-utilities/#delegated-routing
+      // delegatedRouting: () => createDelegatedRoutingV1HttpApiClient('https://delegated-ipfs.dev'),
       identify: identify(),
     },
   })
+
+  const DOM = {
+    nodePeerId: () => document.getElementById('output-node-peer-id'),
+    nodeStatus: () => document.getElementById('output-node-status'),
+    nodePeerCount: () => document.getElementById('output-peer-count'),
+    nodePeerTypes: () => document.getElementById('output-peer-types'),
+    nodePeerDetails: () => document.getElementById('output-peer-details'),
+    nodeAddressCount: () => document.getElementById('output-address-count'),
+    nodeAddresses: () => document.getElementById('output-addresses'),
+
+    inputMultiaddr: () => document.getElementById('input-multiaddr'),
+    connectButton: () => document.getElementById('button-connect'),
+    loggingButtonEnable: () => document.getElementById('button-logging-enable'),
+    loggingButtonDisable: () => document.getElementById('button-logging-disable'),
+    outputQuery: () => document.getElementById('output'),
+  }
 
   update(DOM.nodePeerId(), libp2p.peerId.toString())
   update(DOM.nodeStatus(), 'Online')
@@ -123,10 +101,17 @@ const App = async () => {
     update(DOM.nodePeerDetails(), getPeerDetails(libp2p))
   }, 1000)
 
+  DOM.loggingButtonEnable().onclick = (e) => {
+    enable('*')
+  }
+  DOM.loggingButtonDisable().onclick = (e) => {
+    disable()
+  }
+
   DOM.connectButton().onclick = async (e) => {
     e.preventDefault()
     let maddr = multiaddr(DOM.inputMultiaddr().value)
-    
+
     console.log(maddr)
     try {
       await libp2p.dial(maddr)
@@ -143,10 +128,9 @@ App().catch((err) => {
 function getAddresses(libp2p) {
   return libp2p
     .getMultiaddrs()
-    .map(
-      (ma) =>
-        `<li class="text-sm break-all"><button class="bg-green-500 hover:bg-green-700 text-white mx-2" onclick="navigator.clipboard.writeText('${ma.toString()}')">Copy</button>${ma.toString()}</li>`,
-    )
+    .map((ma) => {
+      return `<li class="text-sm break-all"><button class="bg-green-500 hover:bg-green-700 text-white mx-2" onclick="navigator.clipboard.writeText('${ma.toString()}')">Copy</button>${ma.toString()}</li>`
+    })
     .join('')
 }
 
