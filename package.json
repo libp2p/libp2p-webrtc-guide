@@ -1,5 +1,5 @@
 {
-  "name": "libp2p-browser-guide",
+  "name": "libp2p-browser-connectivity-guide",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -30,20 +30,21 @@
     "@helia/delegated-routing-v1-http-api-client": "^3.0.1",
     "@libp2p/bootstrap": "^10.0.22",
     "@libp2p/circuit-relay-v2": "^1.0.22",
+    "@libp2p/devtools-metrics": "^0.0.1",
     "@libp2p/identify": "^2.0.0",
     "@libp2p/interface-pubsub": "^4.0.1",
     "@libp2p/logger": "^4.0.10",
+    "@libp2p/peer-id-factory": "^3.0.3",
     "@libp2p/pubsub-peer-discovery": "^10.0.2",
+    "@libp2p/simple-metrics": "^1.0.0",
     "@libp2p/webrtc": "^4.0.31",
     "@libp2p/websockets": "^8.0.22",
     "@libp2p/webtransport": "^4.0.30",
     "@multiformats/multiaddr": "^12.2.1",
-    "libp2p": "^1.5.1",
-    "@libp2p/peer-id-factory": "^3.0.3",
-    "@libp2p/simple-metrics": "^1.0.0",
     "@multiformats/multiaddr-matcher": "^1.0.1",
     "date-fns": "^2.30.0",
     "helia": "^2.0.2",
+    "libp2p": "^1.5.1",
     "pretty-ms": "^8.0.0"
   }
 }

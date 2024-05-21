@@ -1,5 +1,6 @@
 // @ts-check
 import { WebRTC, WebSockets, WebSocketsSecure, WebTransport, Circuit } from '@multiformats/multiaddr-matcher'
+import { devToolsMetrics } from '@libp2p/devtools-metrics'
 import { createDelegatedRoutingV1HttpApiClient } from '@helia/delegated-routing-v1-http-api-client'
 import { createLibp2p } from 'libp2p'
 import { identify } from '@libp2p/identify'
@@ -7,7 +8,7 @@ import { peerIdFromString } from '@libp2p/peer-id'
 import { noise } from '@chainsafe/libp2p-noise'
 import { yamux } from '@chainsafe/libp2p-yamux'
 import { bootstrap } from '@libp2p/bootstrap'
-// import { Multiaddr } from '@multiformats/multiaddr'
+import { multiaddr } from '@multiformats/multiaddr'
 import { sha256 } from 'multiformats/hashes/sha2'
 import { gossipsub } from '@chainsafe/libp2p-gossipsub'
 import { webSockets } from '@libp2p/websockets'
@@ -39,7 +40,7 @@ const App = async () => {
     nodePeerDetails: () => document.getElementById('output-peer-details'),
     nodeAddressCount: () => document.getElementById('output-address-count'),
     nodeAddresses: () => document.getElementById('output-addresses'),
-    
+
     inputMultiaddr: () => document.getElementById('input-multiaddr'),
     connectButton: () => document.getElementById('button-connect'),
     // queryButton: () => document.getElementById('button-run-query'),
@@ -50,9 +51,10 @@ const App = async () => {
     addresses: {
       listen: [
         // 👇 Listen for webRTC connection
-        // '/webrtc',
+        '/webrtc',
       ],
     },
+    metrics: devToolsMetrics(),
     transports: [
       webSockets(),
       webTransport(),
@@ -69,7 +71,7 @@ const App = async () => {
       // 👇 Required to create circuit relay reservations in order to hole punch browser-to-browser WebRTC connections
       circuitRelayTransport({
         // When set to >0, this will look up the rendezvous CID in order to discover circuit relay peers it can create a reservation with
-        discoverRelays: 0,
+        discoverRelays: 5,
       }),
     ],
     connectionManager: {
@@ -78,6 +80,10 @@ const App = async () => {
     },
     connectionEncryption: [noise()],
     streamMuxers: [yamux()],
+    connectionGater: {
+      // Allow private addresses for local testing
+      denyDialMultiaddr: async () => false,
+    },
     peerDiscovery: [
       // pubsubPeerDiscovery({
       //   interval: 10_000,
@@ -85,11 +91,9 @@ const App = async () => {
       //   listenOnly: false,
       // }),
       bootstrap({
-      //   // The app-specific go and rust bootstrappers use WebTransport and WebRTC-direct which have ephemeral multiadrrs
-      //   // that are resolved above using the delegated routing API
         list: [
           '/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN',
-      //     '/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb',
+          '/dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb',
         ],
       }),
     ],
@@ -106,14 +110,10 @@ const App = async () => {
   })
 
   update(DOM.nodePeerId(), libp2p.peerId.toString())
-  update(DOM.nodeStatus(), 'Starting')
-
-
+  update(DOM.nodeStatus(), 'Online')
 
   // libp2p.addEventListener('peer:connect', (event) => { })
   // libp2p.addEventListener('peer:disconnect', (event) => { })
-
-  DOM.nodeStatus().innerText = 'Online'
 
   setInterval(() => {
     update(DOM.nodePeerCount(), libp2p.getConnections().length)
@@ -125,10 +125,14 @@ const App = async () => {
 
   DOM.connectButton().onclick = async (e) => {
     e.preventDefault()
-    const multiaddr = DOM.inputMultiaddr().value
-
-    libp2p.dial(multiaddr)
+    let maddr = multiaddr(DOM.inputMultiaddr().value)
     
+    console.log(maddr)
+    try {
+      await libp2p.dial(maddr)
+    } catch (e) {
+      console.log(e)
+    }
   }
 }
 
@@ -141,7 +145,7 @@ function getAddresses(libp2p) {
     .getMultiaddrs()
     .map(
       (ma) =>
-        `<li>${ma.toString()} <button onclick="navigator.clipboard.writeText('${ma.toString()}')">Copy</button></li>`,
+        `<li class="text-sm break-all"><button class="bg-green-500 hover:bg-green-700 text-white mx-2" onclick="navigator.clipboard.writeText('${ma.toString()}')">Copy</button>${ma.toString()}</li>`,
     )
     .join('')
 }
@@ -185,18 +189,7 @@ function getPeerDetails(libp2p) {
   return libp2p
     .getPeers()
     .map((peer) => {
-      const ping = pings[peer.toString()]
-      let pingOutput = 'Ping RTT: ...measuring<br/>Last measured: 0s ago'
-
-      if (ping != null && ping.latency > -1) {
-        pingOutput = `Ping RTT: ${ping.latency}ms<br/>Last measured: ${Math.round(
-          (Date.now() - ping.lastPing) / 1000,
-        )}s ago`
-      }
-
       const peerConnections = libp2p.getConnections(peer)
-
-      pingOutput += `<br>Connection age: ${prettyMs(Date.now() - peerConnections[0].timeline.open)}`
 
       let nodeType = []
 
@@ -219,13 +212,12 @@ function getPeerDetails(libp2p) {
       }
 
       return `<li>
-      <h4>${peer.toString()} <button onclick="navigator.clipboard.writeText('${peer.toString()}')">Copy</button> ${
+      <span>${peer.toString()} <button onclick="navigator.clipboard.writeText('${peer.toString()}')">Copy</button> ${
         nodeType.length > 0 ? `(${nodeType.join(', ')})` : ''
-      }</h4>
-      <p>${pingOutput}</p>
+      }</span>
       <ul>${peerConnections
         .map((conn) => {
-          return `<li>${conn.remoteAddr.toString()} <button onclick="navigator.clipboard.writeText('${conn.remoteAddr.toString()}')">Copy</button></li>`
+          return `<li class="break-all">${conn.remoteAddr.toString()} <button onclick="navigator.clipboard.writeText('${conn.remoteAddr.toString()}')">Copy</button></li>`
         })
         .join('')}</ul>
     </li>`
