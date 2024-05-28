@@ -1,5 +1,4 @@
 // @ts-check
-import { WebRTC, WebSockets, WebSocketsSecure, WebTransport, Circuit } from '@multiformats/multiaddr-matcher'
 import { createLibp2p } from 'libp2p'
 import { identify } from '@libp2p/identify'
 import { noise } from '@chainsafe/libp2p-noise'
@@ -12,19 +11,20 @@ import { webRTC, webRTCDirect } from '@libp2p/webrtc'
 import { circuitRelayTransport } from '@libp2p/circuit-relay-v2'
 import { enable, disable } from '@libp2p/logger'
 import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery'
-import { protocols } from '@multiformats/multiaddr'
-import { PUBSUB_PEER_DISCOVERY, bootstrapPeers } from './constants'
+import { PUBSUB_PEER_DISCOVERY } from './constants'
+import { update, getPeerTypes, getAddresses, getPeerDetails } from './utils'
+import { bootstrap } from '@libp2p/bootstrap'
+
 
 const App = async () => {
   const libp2p = await createLibp2p({
-    addresses: {
-      listen: [
-        // 👇 Listen for webRTC connection
-        '/webrtc',
-      ],
-    },
+    // addresses: {
+    //   listen: [
+    //     // 👇 Listen for webRTC connection
+    //     '/webrtc',
+    //   ],
+    // },
     transports: [
-      webSockets(),
       webTransport(),
       webRTC({
         rtcConfiguration: {
@@ -36,10 +36,10 @@ const App = async () => {
           ],
         },
       }),
-      // 👇 Required to create circuit relay reservations in order to hole punch browser-to-browser WebRTC connections
-      circuitRelayTransport({
-        discoverRelays: 2,
-      }),
+      // // 👇 Required to create circuit relay reservations in order to hole punch browser-to-browser WebRTC connections
+      // circuitRelayTransport({
+      //   discoverRelays: 1,
+      // }),
     ],
     connectionEncryption: [noise()],
     streamMuxers: [yamux()],
@@ -47,20 +47,25 @@ const App = async () => {
       // Allow private addresses for local testing
       denyDialMultiaddr: async () => false,
     },
-    peerDiscovery: [
-      pubsubPeerDiscovery({
-        interval: 10_000,
-        topics: [PUBSUB_PEER_DISCOVERY],
-      }),
-    ],
+    // peerDiscovery: [
+      // bootstrap({
+      //   list: [],
+      // }),
+      // pubsubPeerDiscovery({
+      //   interval: 10_000,
+      //   topics: [PUBSUB_PEER_DISCOVERY],
+      // }),
+    // ],
     services: {
-      pubsub: gossipsub({
-        allowPublishToZeroTopicPeers: true,
-        ignoreDuplicatePublishError: true,
-      }),
+      // pubsub: gossipsub({
+      //   allowPublishToZeroTopicPeers: true,
+      //   ignoreDuplicatePublishError: true,
+      // }),
       identify: identify(),
     },
   })
+
+  globalThis.libp2p = libp2p
 
   const DOM = {
     nodePeerId: () => document.getElementById('output-node-peer-id'),
@@ -81,8 +86,8 @@ const App = async () => {
   update(DOM.nodePeerId(), libp2p.peerId.toString())
   update(DOM.nodeStatus(), 'Online')
 
-  // libp2p.addEventListener('peer:connect', (event) => { })
-  // libp2p.addEventListener('peer:disconnect', (event) => { })
+  libp2p.addEventListener('peer:connect', (event) => { })
+  libp2p.addEventListener('peer:disconnect', (event) => { })
 
   setInterval(() => {
     update(DOM.nodePeerCount(), libp2p.getConnections().length)
@@ -93,7 +98,7 @@ const App = async () => {
   }, 1000)
 
   DOM.loggingButtonEnable().onclick = (e) => {
-    enable('*')
+    enable('*,*:debug')
   }
   DOM.loggingButtonDisable().onclick = (e) => {
     disable()
@@ -116,92 +121,4 @@ App().catch((err) => {
   console.error(err) // eslint-disable-line no-console
 })
 
-function getAddresses(libp2p) {
-  return libp2p
-    .getMultiaddrs()
-    .map((ma) => {
-      return `<li class="text-sm break-all"><button class="bg-green-500 hover:bg-green-700 text-white mx-2" onclick="navigator.clipboard.writeText('${ma.toString()}')">Copy</button>${ma.toString()}</li>`
-    })
-    .join('')
-}
 
-function getPeerTypes(libp2p) {
-  const types = {
-    'Circuit Relay': 0,
-    WebRTC: 0,
-    WebSockets: 0,
-    'WebSockets (secure)': 0,
-    WebTransport: 0,
-    Other: 0,
-  }
-
-  libp2p
-    .getConnections()
-    .map((conn) => conn.remoteAddr)
-    .forEach((ma) => {
-      if (WebRTC.exactMatch(ma) || ma.toString().includes('/webrtc/')) {
-        types['WebRTC']++
-      } else if (WebSockets.exactMatch(ma)) {
-        types['WebSockets']++
-      } else if (WebSocketsSecure.exactMatch(ma)) {
-        types['WebSockets (secure)']++
-      } else if (WebTransport.exactMatch(ma)) {
-        types['WebTransport']++
-      } else if (Circuit.exactMatch(ma)) {
-        types['Circuit Relay']++
-      } else {
-        types['Other']++
-        console.info('wat', ma.toString())
-      }
-    })
-
-  return Object.entries(types)
-    .map(([name, count]) => `<li>${name}: ${count}</li>`)
-    .join('')
-}
-
-function getPeerDetails(libp2p) {
-  return libp2p
-    .getPeers()
-    .map((peer) => {
-      const peerConnections = libp2p.getConnections(peer)
-
-      let nodeType = []
-
-      // detect if this is a bootstrap node
-      if (bootstrapPeers.includes(peer.toString())) {
-        nodeType.push('bootstrap')
-      }
-
-      const relayMultiaddrs = libp2p.getMultiaddrs().filter((ma) => Circuit.exactMatch(ma))
-      const relayPeers = relayMultiaddrs.map((ma) => {
-        return ma
-          .stringTuples()
-          .filter(([name, _]) => name === protocols('p2p').code)
-          .map(([_, value]) => value)[0]
-      })
-
-      // detect if this is a relay we have a reservation on
-      if (relayPeers.includes(peer.toString())) {
-        nodeType.push('relay')
-      }
-
-      return `<li>
-      <span>${peer.toString()} <button onclick="navigator.clipboard.writeText('${peer.toString()}')">Copy</button> ${
-        nodeType.length > 0 ? `(${nodeType.join(', ')})` : ''
-      }</span>
-      <ul>${peerConnections
-        .map((conn) => {
-          return `<li class="break-all">${conn.remoteAddr.toString()} <button onclick="navigator.clipboard.writeText('${conn.remoteAddr.toString()}')">Copy</button></li>`
-        })
-        .join('')}</ul>
-    </li>`
-    })
-    .join('')
-}
-
-function update(element, newContent) {
-  if (element.innerHTML !== newContent) {
-    element.innerHTML = newContent
-  }
-}
