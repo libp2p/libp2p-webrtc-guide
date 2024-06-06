@@ -9,7 +9,8 @@
     "clean": "rimraf ./dist",
     "build:dev": "mkdir -p dist && ln -fs ../src/index.html dist/index.html",
     "build": "mkdir -p dist && cp src/index.html dist/index.html && node ./esbuild.js",
-    "start": "npm run build:dev && esbuild src/index.js --serve --sourcemap --bundle --outdir=dist --servedir=dist"
+    "start": "npm run build:dev && esbuild src/index.js --serve --sourcemap --bundle --outdir=dist --servedir=dist",
+    "start:relay": "node node-relay/index.js"
   },
   "browserslist": "last 1 Chrome version",
   "devDependencies": {
