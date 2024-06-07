@@ -8,24 +8,25 @@ import { gossipsub } from '@chainsafe/libp2p-gossipsub'
 import { webSockets } from '@libp2p/websockets'
 import { webTransport } from '@libp2p/webtransport'
 import { webRTC, webRTCDirect } from '@libp2p/webrtc'
-import { circuitRelayTransport } from '@libp2p/circuit-relay-v2'
+import { circuitRelayTransport, circuitRelayServer } from '@libp2p/circuit-relay-v2'
 import { enable, disable } from '@libp2p/logger'
 import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery'
 import { PUBSUB_PEER_DISCOVERY } from './constants'
 import { update, getPeerTypes, getAddresses, getPeerDetails } from './utils'
 import { bootstrap } from '@libp2p/bootstrap'
-
+import * as filters from '@libp2p/websockets/filters'
 
 const App = async () => {
   const libp2p = await createLibp2p({
-    // addresses: {
-    //   listen: [
-    //     // 👇 Listen for webRTC connection
-    //     '/webrtc',
-    //   ],
-    // },
+    addresses: {
+      listen: [
+        // 👇 Listen for webRTC connection
+        '/webrtc',
+      ],
+    },
     transports: [
       webTransport(),
+      webSockets({ filter: filters.all }),
       webRTC({
         rtcConfiguration: {
           iceServers: [
@@ -37,9 +38,9 @@ const App = async () => {
         },
       }),
       // // 👇 Required to create circuit relay reservations in order to hole punch browser-to-browser WebRTC connections
-      // circuitRelayTransport({
-      //   discoverRelays: 1,
-      // }),
+      circuitRelayTransport({
+        discoverRelays: 1,
+      }),
     ],
     connectionEncryption: [noise()],
     streamMuxers: [yamux()],
