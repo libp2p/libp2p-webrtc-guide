@@ -14,6 +14,7 @@ import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery'
 // import { update, getPeerTypes, getAddresses, getPeerDetails } from './utils'
 import { bootstrap } from '@libp2p/bootstrap'
 import { circuitRelayServer } from '@libp2p/circuit-relay-v2'
+import { PUBSUB_PEER_DISCOVERY } from './constants.js'
 
 async function main() {
   // enable('*')
@@ -37,13 +38,15 @@ async function main() {
     services: {
       identify: identify(),
       autoNat: autoNAT(),
-      relay: circuitRelayServer({})
+      relay: circuitRelayServer(),
+      pubsub: gossipsub(),
     },
   })
 
-  // libp2p.addEventListener('self:peer:update', (event) => console.log(event.detail.peer.addresses))
-  console.log(libp2p.peerId.toString())
-  console.log(libp2p.getMultiaddrs())
+  libp2p.services.pubsub.subscribe(PUBSUB_PEER_DISCOVERY)
+
+  console.log('PeerID: ', libp2p.peerId.toString())
+  console.log('Multiaddrs: ', libp2p.getMultiaddrs())
 }
 
 main()

@@ -18,15 +18,18 @@ import * as filters from '@libp2p/websockets/filters'
 
 const App = async () => {
   const libp2p = await createLibp2p({
-    addresses: {
-      listen: [
-        // 👇 Listen for webRTC connection
-        '/webrtc',
-      ],
-    },
+    // addresses: {
+    //   listen: [
+    //     // 👇 Listen for webRTC connection
+    //     '/webrtc',
+    //   ],
+    // },
     transports: [
+      webSockets({
+        // Allow all WebSocket connections inclusing without TLS
+        filter: filters.all,
+      }),
       webTransport(),
-      webSockets({ filter: filters.all }),
       webRTC({
         rtcConfiguration: {
           iceServers: [
@@ -38,9 +41,9 @@ const App = async () => {
         },
       }),
       // // 👇 Required to create circuit relay reservations in order to hole punch browser-to-browser WebRTC connections
-      circuitRelayTransport({
-        discoverRelays: 1,
-      }),
+      // circuitRelayTransport({
+      //   discoverRelays: 1,
+      // }),
     ],
     connectionEncryption: [noise()],
     streamMuxers: [yamux()],
@@ -48,20 +51,17 @@ const App = async () => {
       // Allow private addresses for local testing
       denyDialMultiaddr: async () => false,
     },
-    // peerDiscovery: [
+    peerDiscovery: [
       // bootstrap({
-      //   list: [],
+      //   list: [''],
       // }),
       // pubsubPeerDiscovery({
       //   interval: 10_000,
       //   topics: [PUBSUB_PEER_DISCOVERY],
       // }),
-    // ],
+    ],
     services: {
-      // pubsub: gossipsub({
-      //   allowPublishToZeroTopicPeers: true,
-      //   ignoreDuplicatePublishError: true,
-      // }),
+      // pubsub: gossipsub(),
       identify: identify(),
     },
   })
@@ -87,8 +87,8 @@ const App = async () => {
   update(DOM.nodePeerId(), libp2p.peerId.toString())
   update(DOM.nodeStatus(), 'Online')
 
-  libp2p.addEventListener('peer:connect', (event) => { })
-  libp2p.addEventListener('peer:disconnect', (event) => { })
+  libp2p.addEventListener('peer:connect', (event) => {})
+  libp2p.addEventListener('peer:disconnect', (event) => {})
 
   setInterval(() => {
     update(DOM.nodePeerCount(), libp2p.getConnections().length)
@@ -121,5 +121,3 @@ const App = async () => {
 App().catch((err) => {
   console.error(err) // eslint-disable-line no-console
 })
-
-

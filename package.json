@@ -1,18 +1,17 @@
 {
-  "name": "libp2p-browser-connectivity-guide",
+  "name": "libp2p-webrtc-guide",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "How many WebTransport sessions are opened",
+  "description": "associated code for the libp2p webrtc guide",
   "license": "ISC",
   "scripts": {
     "clean": "rimraf ./dist",
     "build:dev": "mkdir -p dist && ln -fs ../src/index.html dist/index.html",
     "build": "mkdir -p dist && cp src/index.html dist/index.html && node ./esbuild.js",
     "start": "npm run build:dev && esbuild src/index.js --serve --sourcemap --bundle --outdir=dist --servedir=dist",
-    "start:relay": "node node-relay/index.js"
+    "start:relay": "node src/relay.js"
   },
-  "browserslist": "last 1 Chrome version",
   "devDependencies": {
     "esbuild": "^0.21.3",
     "rimraf": "^5.0.7"
