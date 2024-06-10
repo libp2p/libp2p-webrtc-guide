@@ -1,4 +1,4 @@
-module github.com/libp2p/libp2p-browser-guide/bootstrapper
+module github.com/libp2p/libp2p-webrtc-guide/go-relay
 
 go 1.21.6
 
