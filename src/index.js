@@ -30,16 +30,7 @@ const App = async () => {
         filter: filters.all,
       }),
       webTransport(),
-      webRTC({
-        rtcConfiguration: {
-          iceServers: [
-            {
-              // STUN servers help the browser discover its own public IPs
-              urls: ['stun:stun.l.google.com:19302', 'stun:global.stun.twilio.com:3478'],
-            },
-          ],
-        },
-      }),
+      webRTC(),
       // // 👇 Required to create circuit relay reservations in order to hole punch browser-to-browser WebRTC connections
       // circuitRelayTransport({
       //   discoverRelays: 1,
