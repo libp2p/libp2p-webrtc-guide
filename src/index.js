@@ -13,7 +13,6 @@ import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery'
 import { PUBSUB_PEER_DISCOVERY } from './constants'
 import { update, getPeerTypes, getAddresses, getPeerDetails } from './utils'
 import { bootstrap } from '@libp2p/bootstrap'
-import * as filters from '@libp2p/websockets/filters'
 import { circuitRelayTransport } from '@libp2p/circuit-relay-v2'
 
 const App = async () => {
