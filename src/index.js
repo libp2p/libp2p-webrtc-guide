@@ -53,6 +53,7 @@ const App = async () => {
   })
 
 
+  // 👇 Dial peers discovered via pubsub
   // libp2p.addEventListener('peer:discovery', async (evt) => {
   //   // Encapsulate the multiaddrs with the peer ID to ensure correct dialing
   //   // Should be fixed when https://github.com/libp2p/js-libp2p/issues/3239 is resolved.
