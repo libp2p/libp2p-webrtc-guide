@@ -7,36 +7,31 @@ import { multiaddr } from '@multiformats/multiaddr'
 import { gossipsub } from '@chainsafe/libp2p-gossipsub'
 import { webSockets } from '@libp2p/websockets'
 import { webTransport } from '@libp2p/webtransport'
-import { webRTC, webRTCDirect } from '@libp2p/webrtc'
-import { circuitRelayTransport, circuitRelayServer } from '@libp2p/circuit-relay-v2'
+import { webRTC } from '@libp2p/webrtc'
 import { enable, disable } from '@libp2p/logger'
 import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery'
 import { PUBSUB_PEER_DISCOVERY } from './constants'
 import { update, getPeerTypes, getAddresses, getPeerDetails } from './utils'
 import { bootstrap } from '@libp2p/bootstrap'
-import * as filters from '@libp2p/websockets/filters'
+import { circuitRelayTransport } from '@libp2p/circuit-relay-v2'
 
 const App = async () => {
   const libp2p = await createLibp2p({
     // addresses: {
     //   listen: [
+    //     // 👇 Required to create circuit relay reservations in order to hole punch browser-to-browser WebRTC connections
+    //     '/p2p-circuit',
     //     // 👇 Listen for webRTC connection
     //     '/webrtc',
     //   ],
     // },
     transports: [
-      webSockets({
-        // Allow all WebSocket connections inclusing without TLS
-        filter: filters.all,
-      }),
+      webSockets(),
       webTransport(),
       webRTC(),
-      // // 👇 Required to create circuit relay reservations in order to hole punch browser-to-browser WebRTC connections
-      // circuitRelayTransport({
-      //   discoverRelays: 1,
-      // }),
+      circuitRelayTransport(),
     ],
-    connectionEncryption: [noise()],
+    connectionEncrypters: [noise()],
     streamMuxers: [yamux()],
     connectionGater: {
       // Allow private addresses for local testing

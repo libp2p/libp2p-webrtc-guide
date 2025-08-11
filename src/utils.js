@@ -1,6 +1,5 @@
-import { WebRTC, WebSockets, WebSocketsSecure, WebTransport, Circuit } from '@multiformats/multiaddr-matcher'
-import { protocols } from '@multiformats/multiaddr'
-import { bootstrapPeers } from './constants'
+import { WebRTC, WebSockets, WebSocketsSecure, WebTransport, Circuit, WebRTCDirect } from '@multiformats/multiaddr-matcher'
+import { bootstrapPeers } from './constants.js'
 
 export function getAddresses(libp2p) {
   return libp2p
@@ -14,6 +13,7 @@ export function getPeerTypes(libp2p) {
   const types = {
     'Circuit Relay': 0,
     WebRTC: 0,
+    'WebRTC Direct': 0,
     WebSockets: 0,
     'WebSockets (secure)': 0,
     WebTransport: 0,
@@ -24,8 +24,10 @@ export function getPeerTypes(libp2p) {
     .getConnections()
     .map((conn) => conn.remoteAddr)
     .forEach((ma) => {
-      if (WebRTC.exactMatch(ma) || ma.toString().includes('/webrtc/')) {
+      if (WebRTC.exactMatch(ma)) {
         types['WebRTC']++
+      } else if (WebRTCDirect.exactMatch(ma)) {
+        types['WebRTC Direct']++
       } else if (WebSockets.exactMatch(ma)) {
         types['WebSockets']++
       } else if (WebSocketsSecure.exactMatch(ma)) {
@@ -60,9 +62,9 @@ export function getPeerDetails(libp2p) {
       const relayMultiaddrs = libp2p.getMultiaddrs().filter((ma) => Circuit.exactMatch(ma))
       const relayPeers = relayMultiaddrs.map((ma) => {
         return ma
-          .stringTuples()
-          .filter(([name, _]) => name === protocols('p2p').code)
-          .map(([_, value]) => value)[0]
+          .getComponents()
+          .filter(({ name }) => name === 'p2p')
+          .map(({ value }) => value)
       })
 
       // detect if this is a relay we have a reservation on
