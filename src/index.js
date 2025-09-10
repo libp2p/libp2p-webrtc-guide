@@ -13,14 +13,18 @@ import { webSockets } from "@libp2p/websockets";
 import { webTransport } from "@libp2p/webtransport";
 import { multiaddr } from "@multiformats/multiaddr";
 import { createLibp2p } from "libp2p";
-import { PUBSUB_PEER_DISCOVERY } from "./constants";
+import { createHandlerRelayConnected } from "./client-logic/handle-relay-peer-connected";
 import { getAddresses, getPeerDetails, getPeerTypes, update } from "./utils";
+import { handleChatProto, attachChat } from "./utils/chat";
+import { initRoomRegistrationProtocol } from "./utils/room-registration-protcol";
 
 const RELAT_SERVER_URL = "http://192.168.88.186:3001";
 
-const App = async () => {
+const App = async (roomToken) => {
 	const bootstrapAddresses = await getBootstrapAddresses();
 	console.log(bootstrapAddresses);
+	console.log("Room token:", roomToken);
+	const relayPeerIdStr = bootstrapAddresses.peerId;
 
 	const libp2p = await createLibp2p({
 		addresses: {
@@ -42,10 +46,9 @@ const App = async () => {
 		connectionGater: {
 			// Allow private addresses for local testing
 			denyDialMultiaddr: async (ma) => {
-				console.log("denyDialMultiaddr", ma.toString());
 				if (ma.toString().startsWith("/ip4/127.0.0.1")) {
-					console.log("deny!");
-					return true;
+					// console.log("deny!");
+					return false;
 				}
 				return false;
 			},
@@ -53,7 +56,6 @@ const App = async () => {
 		peerDiscovery: [
 			bootstrap({
 				list: [
-					// '/ip4/192.168.88.176/tcp/9001/ws/p2p/12D3KooWBZbeJ7ki3eppesMrnSC4W2qeEAPfZACsQHSFFPfP9fRS'
 					...(bootstrapAddresses.multiaddrs.filter(
 						(ma) => !ma.toString().startsWith("/ip4/127.0.0.1"),
 					) ?? []),
@@ -61,7 +63,7 @@ const App = async () => {
 			}),
 			pubsubPeerDiscovery({
 				interval: 10_000,
-				topics: [PUBSUB_PEER_DISCOVERY],
+				topics: [roomToken],
 			}),
 		],
 		services: {
@@ -70,18 +72,70 @@ const App = async () => {
 		},
 	});
 
+	const handlers = createHandlerRelayConnected({
+		libp2p,
+		roomToken,
+	});
+
+	let connectedRelayPeerIdStr;
+	const connectedPeerIdsStr = new Set();
+
+  const roomRegistrationProt = initRoomRegistrationProtocol(libp2p, {});
+  await roomRegistrationProt.start();
+
+	handleChatProto(libp2p, (msg, peerIdStr) => {
+		console.log(`Received chat message in handleChatProto from ${peerIdStr}:`, msg);
+	});
+
+	libp2p.addEventListener("peer:connect", async (evt) => {
+		const peerIdStr = evt.detail.toString();
+		console.log("Peer connected:", peerIdStr);
+		console.log("Relay peer id:", relayPeerIdStr);
+
+		if (peerIdStr === relayPeerIdStr) {
+			connectedRelayPeerIdStr = peerIdStr;
+			try{
+			const { registerRoom } = await roomRegistrationProt.attachOngoingStream(peerIdStr);
+      console.log("Relay node found, asking to register room", roomToken);
+      registerRoom(roomToken);
+			}catch(error){
+				console.error("Error registering room:", error);
+			}
+		} else{
+		  console.log("Non-relay peer connected. Sending hello message")
+      const chatControls = await attachChat(libp2p, peerIdStr, () => { });
+      chatControls.sendJson({ type: "hello", message: "Hello roomie!" });
+		}
+		connectedPeerIdsStr.add(peerIdStr);
+	});
+
+	libp2p.addEventListener("peer:disconnect", (evt) => {
+		const peerIdStr = evt.detail.toString();
+		if (peerIdStr === connectedRelayPeerIdStr) {
+			connectedRelayPeerIdStr = undefined;
+		} else {
+			connectedPeerIdsStr.delete(peerIdStr);
+		}
+	});
+
 	// 👇 Dial peers discovered via pubsub
 	libp2p.addEventListener("peer:discovery", async (evt) => {
 		// Encapsulate the multiaddrs with the peer ID to ensure correct dialing
 		// Should be fixed when https://github.com/libp2p/js-libp2p/issues/3239 is resolved.
-		console.log("peer:discovery", evt.detail);
+		// console.log("peer-discovery", evt);
+		const discoveredPeerIdStr = evt.detail.id.toString();
 		const maddrs = evt.detail.multiaddrs.map((ma) =>
-			ma.encapsulate(`/p2p/${evt.detail.id.toString()}`),
+			ma.encapsulate(`/p2p/${discoveredPeerIdStr}`),
 		);
-		console.log(
-			`Discovered new peer (${evt.detail.id.toString()}). Dialling:`,
-			maddrs.map((ma) => ma.toString()),
-		);
+		// console.log(
+		// 	`Discovered new peer (${discoveredPeerIdStr}). Dialling:`,
+		// 	maddrs.map((ma) => ma.toString()),
+		// );
+		if (discoveredPeerIdStr === relayPeerIdStr) {
+			console.log("Dialing relay peer");
+		} else {
+			console.log("Dialing non-relay peer");
+		}
 		try {
 			await libp2p.dial(maddrs); // dial the new peer
 		} catch (err) {
@@ -142,12 +196,30 @@ const App = async () => {
 	};
 };
 
-App().catch((err) => {
-	console.error(err); // eslint-disable-line no-console
-});
-
 function getBootstrapAddresses() {
 	return fetch(`${RELAT_SERVER_URL}/relay-addresses`).then((response) =>
 		response.json(),
 	);
 }
+
+document
+	.querySelector("#roomTokenSubmit")
+	?.addEventListener("click", async (e) => {
+		e.preventDefault();
+		const roomTokenInput = document.getElementById("roomToken");
+		if (!(roomTokenInput instanceof HTMLInputElement)) {
+			return;
+		}
+		if (!roomTokenInput.value) {
+			roomTokenInput.value = "default_room_token";
+		}
+
+		roomTokenInput.disabled = true;
+		document
+			.querySelector("#roomTokenSubmit")
+			?.setAttribute("disabled", "disabled");
+
+		App(roomTokenInput.value);
+	});
+
+function _sendMessageToPeer(_peerIdStr, _messageObj) {}
