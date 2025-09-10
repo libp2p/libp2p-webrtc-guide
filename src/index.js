@@ -17,8 +17,9 @@ import { createHandlerRelayConnected } from "./client-logic/handle-relay-peer-co
 import { getAddresses, getPeerDetails, getPeerTypes, update } from "./utils";
 import { handleChatProto, attachChat } from "./utils/chat";
 import { initRoomRegistrationProtocol } from "./utils/room-registration-protcol";
+import { PersistingDialer } from "./utils/persisting-dialer";
 
-const RELAT_SERVER_URL = "http://192.168.88.186:3001";
+const RELAT_SERVER_URL = "http://127.0.0.1:3001";
 
 const App = async (roomToken) => {
 	const bootstrapAddresses = await getBootstrapAddresses();
@@ -103,8 +104,7 @@ const App = async (roomToken) => {
 			}
 		} else{
 		  console.log("Non-relay peer connected. Sending hello message")
-      const chatControls = await attachChat(libp2p, peerIdStr, () => { });
-      chatControls.sendJson({ type: "hello", message: "Hello roomie!" });
+			await sendWelcomeMessage(peerIdStr);
 		}
 		connectedPeerIdsStr.add(peerIdStr);
 	});
@@ -117,6 +117,19 @@ const App = async (roomToken) => {
 			connectedPeerIdsStr.delete(peerIdStr);
 		}
 	});
+
+	async function sendWelcomeMessage(peerIdStr) {
+		const chatControls = await attachChat(libp2p, peerIdStr, () => { });
+		chatControls.sendJson({ type: "hello", message: "Hello roomie!" });
+	}
+
+	const persistingDialer = new PersistingDialer(libp2p, {
+	  onSuccessfullyDialedPeer: async (peerIdStr) => {
+	    console.log(`Successfully dialed peer ${peerIdStr}`);
+			await sendWelcomeMessage(peerIdStr);
+	  },
+	});
+
 
 	// 👇 Dial peers discovered via pubsub
 	libp2p.addEventListener("peer:discovery", async (evt) => {
@@ -136,9 +149,15 @@ const App = async (roomToken) => {
 		} else {
 			console.log("Dialing non-relay peer");
 		}
+		if (maddrs.length === 0){
+			console.log("No multiaddrs to dial");
+			persistingDialer.add(discoveredPeerIdStr);
+      return;
+		}
 		try {
 			await libp2p.dial(maddrs); // dial the new peer
 		} catch (err) {
+		  persistingDialer.add(discoveredPeerIdStr);
 			console.error(`Failed to dial peer (${evt.detail.id.toString()}):`, err);
 		}
 	});

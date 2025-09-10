@@ -13,7 +13,6 @@ import express from "express";
 import { createLibp2p } from "libp2p";
 import { attachChat, handleChatProto } from "./utils/chat.ts";
 import { initRoomRegistrationProtocol } from "./utils/room-registration-protcol.ts";
-import { ro } from "date-fns/locale/ro";
 
 let peerId;
 let multiaddrs;
