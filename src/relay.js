@@ -8,11 +8,13 @@ import { circuitRelayServer } from "@libp2p/circuit-relay-v2";
 import { identify } from "@libp2p/identify";
 import { tcp } from "@libp2p/tcp";
 import { webSockets } from "@libp2p/websockets";
-import cors from "cors";
-import express from "express";
 import { createLibp2p } from "libp2p";
-import { attachChat, handleChatProto } from "./utils/chat.ts";
-import { initRoomRegistrationProtocol } from "./utils/room-registration-protcol.ts";
+import { initChatProtocol } from "./common/chat.ts";
+import { initRoomRegistrationProtocol } from "./common/room-registration-protocol.ts";
+import {
+	initHttpService,
+	setInfoForHttpService,
+} from "./relay/http-service.ts";
 
 let peerId;
 let multiaddrs;
@@ -38,6 +40,11 @@ async function main() {
 
 	peerId = libp2p.peerId;
 	multiaddrs = libp2p.getMultiaddrs();
+
+	setInfoForHttpService({
+		peerId,
+		multiaddrs,
+	});
 	const registeredRooms = new Set();
 
 	const roomRegistrationProt = initRoomRegistrationProtocol(libp2p, {
@@ -54,22 +61,31 @@ async function main() {
 	});
 	await roomRegistrationProt.start();
 
+	const chatProtocol = initChatProtocol(libp2p, {
+		onMessage: async (message, peerId) => {
+			console.log(
+				`Received message in handleChatProto from peer: ${peerId}:`,
+				message,
+			);
+			const { sendText } = await chatProtocol.attachChat(peerId);
+			sendText("Hello from relay server!");
+		},
+	});
+
+	chatProtocol.start();
+
 	const connectedPeers = new Set();
-	const peerState = new Map();
 
 	libp2p.addEventListener("peer:connect", (event) => {
 		console.log("Peer connected:", event.detail);
 		connectedPeers.add(event.detail.toString());
 		console.log("Connected peers:", connectedPeers);
-		registerHandlers(event.detail.toString());
-		peerState.set(event.detail.toString(), {});
 	});
 
 	libp2p.addEventListener("peer:disconnect", (event) => {
 		console.log("Disconnected peer:", event.detail.toString());
 		connectedPeers.delete(event.detail.toString());
 		console.log("Connected peers:", connectedPeers);
-		peerState.delete(event.detail.toString());
 	});
 
 	console.log("PeerID: ", peerId.toString());
@@ -77,42 +93,7 @@ async function main() {
 		"Multiaddrs: ",
 		multiaddrs.map((ma) => ma.toString()),
 	);
-
-	handleChatProto(libp2p, (message, peerId) => {
-		console.log(
-			`Received message in handleChatProto from peer: ${peerId}:`,
-			message,
-		);
-		peerState.get(peerId).chatApi.sendText(`Hello from the peer relay!`);
-	});
-
-	async function registerHandlers(peerIdStr) {
-		console.log("chat api handler registerd for ", peerIdStr);
-		const chatApi = await attachChat(libp2p, peerIdStr, (message) => {
-			console.log("Received message in attach chat:", message);
-			chatApi.sendText(`Hello from the peer ${peerIdStr}`);
-		});
-		peerState.get(peerIdStr).chatApi = chatApi;
-	}
 }
 
-const app = express();
-app.use(cors());
-
-app.get("/relay-addresses", (_req, res) => {
-	if (!peerId) {
-		res.status(404).send("Peer ID not set");
-	} else {
-		res.json({
-			peerId: peerId.toString(),
-			multiaddrs: multiaddrs.map((ma) => ma.toString()),
-		});
-	}
-});
-
-const port = 3001;
-app.listen(port, "0.0.0.0", () => {
-	console.log(`Relay server's http service is listening on port ${port}`);
-});
-
 main();
+initHttpService();

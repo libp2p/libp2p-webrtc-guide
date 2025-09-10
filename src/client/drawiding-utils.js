@@ -6,7 +6,7 @@ import {
 	WebSocketsSecure,
 	WebTransport,
 } from "@multiformats/multiaddr-matcher";
-import { bootstrapPeers } from "./constants.js";
+import { bootstrapPeers } from "./../common/constants.js";
 
 export function getAddresses(libp2p) {
 	return libp2p

@@ -8,9 +8,26 @@ export type ChatMessage = string | Record<string, unknown>;
 
 export const CHAT_PROTO = "/myapp/chat/1.0.0";
 
-type Stream = Awaited<ReturnType<Libp2p["dialProtocol"]>>;
+type Callbacks = {
+	onMessage: (msg: ChatMessage, peerId: string) => void;
+};
 
-export function handleChatProto(
+export function initChatProtocol(libp2p: Libp2p, callbacks: Callbacks) {
+	const start = () => {
+		handleChatProto(libp2p, callbacks.onMessage);
+	};
+
+	const attachChat = async (peerIdStr: string) => {
+		return attachChatToPeer(libp2p, peerIdStr, callbacks.onMessage);
+	};
+
+	return {
+		start,
+		attachChat,
+	};
+}
+
+function handleChatProto(
 	libp2p: Libp2p,
 	onMessage: (msg: ChatMessage, peerId: string) => void,
 ) {
@@ -26,30 +43,26 @@ export function handleChatProto(
 	});
 }
 
-export async function attachChat(
+async function attachChatToPeer(
 	libp2p: Libp2p,
 	peerIdStr: string,
-	onMessage: (msg: ChatMessage) => void,
+	onMessage: (msg: ChatMessage, peerId: string) => void,
 ) {
 	const peerId = peerIdFromString(peerIdStr);
 	const stream = await libp2p.dialProtocol(peerId, CHAT_PROTO);
 	let chatStream: ReturnType<typeof byteStream>;
-	let keepListening = true;
 
 	try {
 		chatStream = byteStream(stream);
 
 		Promise.resolve().then(async () => {
-			while (keepListening) {
+			while (true) {
 				const buf = await chatStream.read();
 				if (!buf) {
-					console.log("❌ No buffer received, ending read loop");
-					keepListening = false;
 					break;
 				}
 				const message = u8ToString(buf.subarray());
-				console.log("📨 Received response:", message);
-				onMessage(message);
+				onMessage(message, peerIdStr);
 			}
 		});
 	} catch (err) {
@@ -63,13 +76,8 @@ export async function attachChat(
 		sendText(JSON.stringify(obj));
 	};
 
-	const close = () => {
-		keepListening = false;
-	};
-
 	return {
 		sendText,
 		sendJson,
-		close,
 	};
 }

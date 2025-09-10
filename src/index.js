@@ -13,11 +13,16 @@ import { webSockets } from "@libp2p/websockets";
 import { webTransport } from "@libp2p/webtransport";
 import { multiaddr } from "@multiformats/multiaddr";
 import { createLibp2p } from "libp2p";
-import { createHandlerRelayConnected } from "./client-logic/handle-relay-peer-connected";
-import { getAddresses, getPeerDetails, getPeerTypes, update } from "./utils";
-import { handleChatProto, attachChat } from "./utils/chat";
-import { initRoomRegistrationProtocol } from "./utils/room-registration-protcol";
-import { PersistingDialer } from "./utils/persisting-dialer";
+import {
+	getAddresses,
+	getPeerDetails,
+	getPeerTypes,
+	update,
+} from "./client/drawiding-utils.js";
+import { PersistingDialer } from "./client/persisting-dialer";
+import { initRoomTokenForm } from "./client/room-token.ts";
+import { initChatProtocol} from "./common/chat.ts";
+import { initRoomRegistrationProtocol } from "./common/room-registration-protocol.ts";
 
 const RELAT_SERVER_URL = "http://127.0.0.1:3001";
 
@@ -45,10 +50,8 @@ const App = async (roomToken) => {
 		connectionEncrypters: [noise()],
 		streamMuxers: [yamux()],
 		connectionGater: {
-			// Allow private addresses for local testing
 			denyDialMultiaddr: async (ma) => {
 				if (ma.toString().startsWith("/ip4/127.0.0.1")) {
-					// console.log("deny!");
 					return false;
 				}
 				return false;
@@ -73,20 +76,20 @@ const App = async (roomToken) => {
 		},
 	});
 
-	const handlers = createHandlerRelayConnected({
-		libp2p,
-		roomToken,
-	});
-
 	let connectedRelayPeerIdStr;
-	const connectedPeerIdsStr = new Set();
 
-  const roomRegistrationProt = initRoomRegistrationProtocol(libp2p, {});
-  await roomRegistrationProt.start();
+	const roomRegistrationProt = initRoomRegistrationProtocol(libp2p);
+	await roomRegistrationProt.start();
 
-	handleChatProto(libp2p, (msg, peerIdStr) => {
-		console.log(`Received chat message in handleChatProto from ${peerIdStr}:`, msg);
+	const chatProtocol = initChatProtocol(libp2p, {
+		onMessage: (msg, peerIdStr) => {
+			console.log(
+				`Received chat message in handleChatProto from ${peerIdStr}:`,
+				msg,
+			);
+		}
 	});
+	chatProtocol.start();
 
 	libp2p.addEventListener("peer:connect", async (evt) => {
 		const peerIdStr = evt.detail.toString();
@@ -95,41 +98,37 @@ const App = async (roomToken) => {
 
 		if (peerIdStr === relayPeerIdStr) {
 			connectedRelayPeerIdStr = peerIdStr;
-			try{
-			const { registerRoom } = await roomRegistrationProt.attachOngoingStream(peerIdStr);
-      console.log("Relay node found, asking to register room", roomToken);
-      registerRoom(roomToken);
-			}catch(error){
-				console.error("Error registering room:", error);
-			}
-		} else{
-		  console.log("Non-relay peer connected. Sending hello message")
+			await askRelayToRegisterPubSubRoom(roomToken);
+			await sendWelcomeMessage(peerIdStr, "Hello dear Relay node!");
+		} else {
+			console.log("Non-relay peer connected. Sending hello message");
 			await sendWelcomeMessage(peerIdStr);
 		}
-		connectedPeerIdsStr.add(peerIdStr);
 	});
 
-	libp2p.addEventListener("peer:disconnect", (evt) => {
-		const peerIdStr = evt.detail.toString();
-		if (peerIdStr === connectedRelayPeerIdStr) {
-			connectedRelayPeerIdStr = undefined;
-		} else {
-			connectedPeerIdsStr.delete(peerIdStr);
+	async function askRelayToRegisterPubSubRoom(roomToken) {
+		try {
+			const { registerRoom } = await roomRegistrationProt.attachOngoingStream(
+				connectedRelayPeerIdStr,
+			);
+			console.log("Relay node found, asking to register room", roomToken);
+			registerRoom(roomToken);
+		} catch (error) {
+			console.error("Error registering room:", error);
 		}
-	});
+	}
 
-	async function sendWelcomeMessage(peerIdStr) {
-		const chatControls = await attachChat(libp2p, peerIdStr, () => { });
-		chatControls.sendJson({ type: "hello", message: "Hello roomie!" });
+	async function sendWelcomeMessage(peerIdStr, customMessage = "") {
+		const chatControls = await chatProtocol.attachChat(peerIdStr);
+		chatControls.sendJson({ type: "hello", message: !!customMessage ? customMessage : "Hello roomie!" });
 	}
 
 	const persistingDialer = new PersistingDialer(libp2p, {
-	  onSuccessfullyDialedPeer: async (peerIdStr) => {
-	    console.log(`Successfully dialed peer ${peerIdStr}`);
+		onSuccessfullyDialedPeer: async (peerIdStr) => {
+			console.log(`Successfully dialed peer ${peerIdStr}`);
 			await sendWelcomeMessage(peerIdStr);
-	  },
+		},
 	});
-
 
 	// 👇 Dial peers discovered via pubsub
 	libp2p.addEventListener("peer:discovery", async (evt) => {
@@ -140,24 +139,21 @@ const App = async (roomToken) => {
 		const maddrs = evt.detail.multiaddrs.map((ma) =>
 			ma.encapsulate(`/p2p/${discoveredPeerIdStr}`),
 		);
-		// console.log(
-		// 	`Discovered new peer (${discoveredPeerIdStr}). Dialling:`,
-		// 	maddrs.map((ma) => ma.toString()),
-		// );
+
 		if (discoveredPeerIdStr === relayPeerIdStr) {
 			console.log("Dialing relay peer");
 		} else {
 			console.log("Dialing non-relay peer");
 		}
-		if (maddrs.length === 0){
+		if (maddrs.length === 0) {
 			console.log("No multiaddrs to dial");
 			persistingDialer.add(discoveredPeerIdStr);
-      return;
+			return;
 		}
 		try {
 			await libp2p.dial(maddrs); // dial the new peer
 		} catch (err) {
-		  persistingDialer.add(discoveredPeerIdStr);
+			persistingDialer.add(discoveredPeerIdStr);
 			console.error(`Failed to dial peer (${evt.detail.id.toString()}):`, err);
 		}
 	});
@@ -183,9 +179,6 @@ const App = async (roomToken) => {
 
 	update(DOM.nodePeerId(), libp2p.peerId.toString());
 	update(DOM.nodeStatus(), "Online");
-
-	libp2p.addEventListener("peer:connect", (_event) => {});
-	libp2p.addEventListener("peer:disconnect", (_event) => {});
 
 	setInterval(() => {
 		update(DOM.nodePeerCount(), libp2p.getConnections().length);
@@ -221,24 +214,8 @@ function getBootstrapAddresses() {
 	);
 }
 
-document
-	.querySelector("#roomTokenSubmit")
-	?.addEventListener("click", async (e) => {
-		e.preventDefault();
-		const roomTokenInput = document.getElementById("roomToken");
-		if (!(roomTokenInput instanceof HTMLInputElement)) {
-			return;
-		}
-		if (!roomTokenInput.value) {
-			roomTokenInput.value = "default_room_token";
-		}
-
-		roomTokenInput.disabled = true;
-		document
-			.querySelector("#roomTokenSubmit")
-			?.setAttribute("disabled", "disabled");
-
-		App(roomTokenInput.value);
-	});
-
-function _sendMessageToPeer(_peerIdStr, _messageObj) {}
+initRoomTokenForm({
+	onSubmit: (roomToken) => {
+		App(roomToken);
+	},
+});

@@ -4,7 +4,6 @@ import type { Libp2p } from "libp2p";
 import { fromString as u8FromString } from "uint8arrays/from-string";
 import { toString as u8ToString } from "uint8arrays/to-string";
 import z, { type ZodSchema } from "zod";
-import { de } from "zod/v4/locales";
 
 export type ChatMessage = string | Record<string, unknown>;
 
