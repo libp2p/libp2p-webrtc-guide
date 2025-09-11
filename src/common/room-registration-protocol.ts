@@ -23,11 +23,7 @@ export function initRoomRegistrationProtocol(
 		: undefined;
 
 	const localAttachOngoingStream = async (peerIdStr: string) => {
-		const { close, sendJson } = await attachOngoingStream(
-			libp2p,
-			peerIdStr,
-			() => {},
-		);
+		const { sendJson } = await attachOngoingStream(libp2p, peerIdStr, () => {});
 
 		return {
 			close,

@@ -12,66 +12,90 @@
     <main class="container mx-auto p-6 bg-white shadow-md rounded-lg mt-10">
       <h1 class="font-bold text-2xl text-blue-600 mb-4">WebRTC Connectivity with js-libp2p</h1>
 
-      <label class="block mb-4">
-          <span>Room token:</span>
-          <input id="roomToken" class="border border-gray-400 px-2 py-1 rounded"/>
-          <button type="button" id="roomTokenSubmit" class="bg-blue-500 hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-500 text-white px-1 py-1 rounded">Submit</button>
-      </label>
+      <form id="input-form">
+          <label class="block mb-4 flex items-center gap-2 max-w-[940px]">
+              <span>Relay server address:</span>
+              <input required name="relayServerAddress" id="relayServerAddress" class="text-xs border border-gray-400 px-2 py-1 rounded flex-grow" placeholder="/ip4/1.2.3.4/tcp/9001/ws/p2p/12D3KooWMpktj14BpddLtBzgAidoBRpGSmgxXDp3XvtHHB2AkKnc"/>
+          </label>
+          <label class="block mb-4">
+              <span>Room token:</span>
+              <input required name="roomToken" id="roomToken" class="border border-gray-400 px-2 py-1 rounded"/>
+          </label>
+          <button type="submit" id="roomTokenSubmit" class="bg-blue-500 hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-500 text-white px-4 py-1 rounded">Submit</button>
+      </form>
 
-      <ul class="list-disc list-inside mb-6">
-        <li>
-          Opened sessions in the last <span id="output-webtransport-opened-per-unit">0s</span>:
-          <span id="output-webtransport-opened-per-minute">0</span>
-        </li>
-        <li>
-          Max opened connections per minute: <span id="output-webtransport-max-opened-per-minute">0</span>
-        </li>
-        <li>
-          <button id="button-logging-enable" class="bg-blue-500 hover:bg-blue-700 text-white px-1 rounded">Enable libp2p Logging</button>
-          <button id="button-logging-disable" class="bg-red-500 hover:bg-red-700 text-white px-1 rounded">Disable libp2p Logging</button>
-        </li>
-      </ul>
+      <hr class="my-6 border-gray-300" />
 
-      <section class="my-4">
-        <h2 class="font-bold text-xl text-blue-600 mb-2">Node</h2>
-        <ul class="list-disc list-inside ml-4">
-          <li>Peer ID: <span class="font-bold" id="output-node-peer-id">Unknown</span></li>
-          <li>Status: <span id="output-node-status">Initialising</span></li>
-          <li>
-            Connections: <span id="output-peer-count">0</span>
-            <ul class="list-disc list-inside ml-6" id="output-peer-types"></ul>
-          </li>
-          <li>
-            Addresses: <span id="output-address-count">0</span>
-            <ul class="list-disc list-inside ml-6" id="output-addresses"></ul>
-          </li>
-        </ul>
-      </section>
+      <div id="main-content" class="invisible">
 
-      <section class="my-6">
-        <h2 class="font-bold text-xl text-blue-600 mb-2">Peers</h2>
-        <p class="flex flex-row items-center gap-2">
-          <label class="block text-gray-700 text-sm font-bold" for="input-multiaddr">Multiaddr</label>
-          <input
-            class="shadow appearance-none border rounded w-full py-2 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            id="input-multiaddr"
-            type="text"
-            placeholder="/ip4/..."
-          />
-          <button
-            class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-            id="button-connect"
-            type="button"
-          >
-            Connect
-          </button>
-        </p>
+          <h2 class="font-bold text-xl text-blue-600 mb-2">Messages</h2>
+          <textarea class="bg-gray-100 p-4 rounded shadow-inner text-xs font-mono whitespace-pre-wrap w-full h-48" id="output-messages" readonly rows="12"></textarea>
+          <label>
+              <form id="message-form" class="flex flex gap-4 w-full items-center justify-end">
+                  <input required name="message" id="message-input" class="shadow appearance-none border rounded w-full max-w-[480px] py-2 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" type="text" placeholder="Type your message here..." />
+                  <button id="message-button" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline flex-shrink-0" type="submit">
+                      Send
+                  </button>
+              </form>
+          </label>
 
-        <ul class="list-disc list-inside ml-4" id="output-peer-details"></ul>
-      </section>
+          <ul class="list-disc list-inside mb-6 mt-6">
+              <li>
+                  Opened sessions in the last <span id="output-webtransport-opened-per-unit">0s</span>:
+                  <span id="output-webtransport-opened-per-minute">0</span>
+              </li>
+              <li>
+                  Max opened connections per minute: <span id="output-webtransport-max-opened-per-minute">0</span>
+              </li>
+              <li>
+                  <button id="button-logging-enable" class="bg-blue-500 hover:bg-blue-700 text-white px-1 rounded">Enable libp2p Logging</button>
+                  <button id="button-logging-disable" class="bg-red-500 hover:bg-red-700 text-white px-1 rounded">Disable libp2p Logging</button>
+              </li>
+          </ul>
 
-      <h2 class="font-bold text-xl text-blue-600 mb-2">Output</h2>
-      <pre class="bg-gray-100 p-4 rounded shadow-inner" id="output"></pre>
+          <section class="my-4">
+              <h2 class="font-bold text-xl text-blue-600 mb-2">Node</h2>
+              <ul class="list-disc list-inside ml-4">
+                  <li>Peer ID: <span class="font-bold" id="output-node-peer-id">Unknown</span></li>
+                  <li>Status: <span id="output-node-status">Initialising</span></li>
+                  <li>
+                      Connections: <span id="output-peer-count">0</span>
+                      <ul class="list-disc list-inside ml-6" id="output-peer-types"></ul>
+                  </li>
+                  <li>
+                      Addresses: <span id="output-address-count">0</span>
+                      <ul class="list-disc list-inside ml-6" id="output-addresses"></ul>
+                  </li>
+              </ul>
+          </section>
+
+          <section class="my-6">
+              <h2 class="font-bold text-xl text-blue-600 mb-2">Peers</h2>
+              <p class="flex flex-row items-center gap-2">
+                  <label class="block text-gray-700 text-sm font-bold" for="input-multiaddr">Multiaddr</label>
+                  <input
+                      class="shadow appearance-none border rounded w-full py-2 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                      id="input-multiaddr"
+                      type="text"
+                      placeholder="/ip4/..."
+                  />
+                  <button
+                      class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline flex-shrink-0"
+                      id="button-connect"
+                      type="button"
+                  >
+                      Manually connect
+                  </button>
+              </p>
+
+              <ul class="list-disc list-inside ml-4" id="output-peer-details"></ul>
+          </section>
+
+
+          <h2 class="font-bold text-xl text-blue-600 mb-2">Output</h2>
+          <pre class="bg-gray-100 p-4 rounded shadow-inner" id="output"></pre>
+
+      </div>
 
       <hr class="my-6 border-gray-300" />
     </main>

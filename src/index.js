@@ -19,18 +19,27 @@ import {
 	getPeerTypes,
 	update,
 } from "./client/drawiding-utils.js";
+import { initMessageForm } from "./client/message-from.ts";
 import { PersistingDialer } from "./client/persisting-dialer";
 import { initRoomTokenForm } from "./client/room-token.ts";
-import { initChatProtocol} from "./common/chat.ts";
+import { initChatProtocol } from "./common/chat.ts";
 import { initRoomRegistrationProtocol } from "./common/room-registration-protocol.ts";
 
 const RELAT_SERVER_URL = "http://127.0.0.1:3001";
 
-const App = async (roomToken) => {
-	const bootstrapAddresses = await getBootstrapAddresses();
-	console.log(bootstrapAddresses);
+const App = async ({ roomToken, relayAddress }) => {
+	// const bootstrapAddresses = await getBootstrapAddresses();
+	// console.log(bootstrapAddresses);
 	console.log("Room token:", roomToken);
-	const relayPeerIdStr = bootstrapAddresses.peerId;
+	// const relayPeerIdStr = bootstrapAddresses.peerId;
+	const relayPeerIdStr = relayAddress.split("/").at(-1);
+	const bootstrapAddresses = [relayAddress];
+
+	const hiddenArea = document.querySelector("#main-content");
+	if (!hiddenArea) {
+		throw new Error('Element with id "main-content" not found');
+	}
+	hiddenArea.classList.remove("invisible");
 
 	const libp2p = await createLibp2p({
 		addresses: {
@@ -59,11 +68,7 @@ const App = async (roomToken) => {
 		},
 		peerDiscovery: [
 			bootstrap({
-				list: [
-					...(bootstrapAddresses.multiaddrs.filter(
-						(ma) => !ma.toString().startsWith("/ip4/127.0.0.1"),
-					) ?? []),
-				],
+				list: [...(bootstrapAddresses ?? [])],
 			}),
 			pubsubPeerDiscovery({
 				interval: 10_000,
@@ -87,10 +92,68 @@ const App = async (roomToken) => {
 				`Received chat message in handleChatProto from ${peerIdStr}:`,
 				msg,
 			);
-		}
+
+			const isRelay = peerIdStr === relayPeerIdStr;
+
+			const logLine = `${shortenPeerId(peerIdStr)} [${isRelay ? "Relay" : "Peer"}]: ${msg}`;
+			addLinesToTextarea(logLine);
+		},
 	});
 	chatProtocol.start();
 
+	function shortenPeerId(peerIdStr) {
+		return `${peerIdStr.slice(0, 4)}...${peerIdStr.slice(-4)}`;
+	}
+
+	const textarea = document.getElementById("output-messages");
+	function addLinesToTextarea(lines) {
+		if (!textarea) return;
+
+		const linesArray = Array.isArray(lines) ? lines : [lines];
+
+		const dateTimeOnlyFormat = new Intl.DateTimeFormat("en-US", {
+			hour: "numeric",
+			minute: "numeric",
+			second: "numeric",
+		});
+
+		const timeStamp = dateTimeOnlyFormat.format(new Date());
+
+		linesArray[0] = `${timeStamp} ${linesArray[0]}`;
+
+		linesArray.forEach((line) => {
+			// @ts-expect-error
+			textarea.value += `${line}\n`;
+			if (!textarea.matches("focus")) {
+				textarea.scrollTop = textarea.scrollHeight;
+			}
+		});
+
+		if (!textarea.matches("focus")) {
+			textarea.scrollTop = textarea.scrollHeight;
+		}
+	}
+
+	initMessageForm((msg) => {
+		const shortenedMessage = msg.substr(0, 10);
+		const addEllipsis = shortenedMessage.length < msg.length;
+		addLinesToTextarea(
+			`[System]: Sending message to all peers - '${shortenedMessage}${addEllipsis ? " (...)" : ""}'`,
+		);
+		connectedPeers.forEach(async (peerIdStr) => {
+			try {
+				const { sendText } = await chatProtocol.attachChat(peerIdStr);
+				sendText(msg);
+			} catch (err) {
+				addLinesToTextarea(
+					`[System]: Error sending message to ${shortenPeerId(peerIdStr)}`,
+				);
+				console.error(err);
+			}
+		});
+	});
+
+	const connectedPeers = new Set();
 	libp2p.addEventListener("peer:connect", async (evt) => {
 		const peerIdStr = evt.detail.toString();
 		console.log("Peer connected:", peerIdStr);
@@ -104,6 +167,20 @@ const App = async (roomToken) => {
 			console.log("Non-relay peer connected. Sending hello message");
 			await sendWelcomeMessage(peerIdStr);
 		}
+
+		addLinesToTextarea(
+			`[System]: Peer connected - ${shortenPeerId(peerIdStr)}`,
+		);
+		connectedPeers.add(peerIdStr);
+	});
+
+	libp2p.addEventListener("peer:disconnect", (evt) => {
+		const peerIdStr = evt.detail.toString();
+		console.log("Peer disconnected:", peerIdStr);
+		connectedPeers.delete(peerIdStr);
+		addLinesToTextarea(
+			`[System]: Peer disconnected - ${shortenPeerId(peerIdStr)}`,
+		);
 	});
 
 	async function askRelayToRegisterPubSubRoom(roomToken) {
@@ -120,7 +197,10 @@ const App = async (roomToken) => {
 
 	async function sendWelcomeMessage(peerIdStr, customMessage = "") {
 		const chatControls = await chatProtocol.attachChat(peerIdStr);
-		chatControls.sendJson({ type: "hello", message: !!customMessage ? customMessage : "Hello roomie!" });
+		chatControls.sendJson({
+			type: "hello",
+			message: customMessage ? customMessage : "Hello roomie!",
+		});
 	}
 
 	const persistingDialer = new PersistingDialer(libp2p, {
@@ -140,7 +220,8 @@ const App = async (roomToken) => {
 			ma.encapsulate(`/p2p/${discoveredPeerIdStr}`),
 		);
 
-		if (discoveredPeerIdStr === relayPeerIdStr) {
+		const isRelayPeerDiscovered = discoveredPeerIdStr === relayPeerIdStr;
+		if (isRelayPeerDiscovered) {
 			console.log("Dialing relay peer");
 		} else {
 			console.log("Dialing non-relay peer");
@@ -153,8 +234,21 @@ const App = async (roomToken) => {
 		try {
 			await libp2p.dial(maddrs); // dial the new peer
 		} catch (err) {
-			persistingDialer.add(discoveredPeerIdStr);
-			console.error(`Failed to dial peer (${evt.detail.id.toString()}):`, err);
+			if (isRelayPeerDiscovered) {
+				addLinesToTextarea(
+					`[System]: Failed to dial relay peer '${shortenPeerId(discoveredPeerIdStr)}'`,
+				);
+				console.error(
+					`Failed to dial relay peer (${evt.detail.id.toString()}):`,
+					err,
+				);
+			} else {
+				persistingDialer.add(discoveredPeerIdStr);
+				console.error(
+					`Failed to dial non-relay peer (${evt.detail.id.toString()}):`,
+					err,
+				);
+			}
 		}
 	});
 
@@ -188,16 +282,20 @@ const App = async (roomToken) => {
 		update(DOM.nodePeerDetails(), getPeerDetails(libp2p));
 	}, 1000);
 
-	DOM.loggingButtonEnable().onclick = (_e) => {
+	DOM.loggingButtonEnable()?.addEventListener("click", (_e) => {
 		enable("*,*:debug");
-	};
-	DOM.loggingButtonDisable().onclick = (_e) => {
+	});
+	DOM.loggingButtonDisable()?.addEventListener("click", (_e) => {
 		disable();
-	};
+	});
 
-	DOM.connectButton().onclick = async (e) => {
+	DOM.connectButton()?.addEventListener("click", async (e) => {
 		e.preventDefault();
-		const maddr = multiaddr(DOM.inputMultiaddr().value);
+		const input = DOM.inputMultiaddr();
+		if (!input || !("value" in input)) return;
+
+		// @ts-expect-error
+		const maddr = multiaddr(input.value);
 
 		console.log(maddr);
 		try {
@@ -205,17 +303,17 @@ const App = async (roomToken) => {
 		} catch (e) {
 			console.log(e);
 		}
-	};
+	});
 };
 
-function getBootstrapAddresses() {
+function _getBootstrapAddresses() {
 	return fetch(`${RELAT_SERVER_URL}/relay-addresses`).then((response) =>
 		response.json(),
 	);
 }
 
 initRoomTokenForm({
-	onSubmit: (roomToken) => {
-		App(roomToken);
+	onSubmit: (args) => {
+		App(args);
 	},
 });

@@ -16,7 +16,7 @@ export const setInfoForHttpService = (info: {
 	multiaddrs = info.multiaddrs;
 };
 
-export const initHttpService = () => {
+export const initHttpService = ({ port = 3001 }: { port?: number }) => {
 	app.get("/relay-addresses", (_req, res) => {
 		if (!peerId) {
 			res.status(404).send("Peer ID not set");
@@ -28,7 +28,6 @@ export const initHttpService = () => {
 		}
 	});
 
-	const port = 3001;
 	app.listen(port, "0.0.0.0", () => {
 		console.log(`Relay server's http service is listening on port ${port}`);
 	});

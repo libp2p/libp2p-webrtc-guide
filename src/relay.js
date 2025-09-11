@@ -19,13 +19,26 @@ import {
 let peerId;
 let multiaddrs;
 
-const _dontAnnounceAsLocal = true;
+const expressPort = process.env.RELAY_EXPRESS_PORT
+	? parseInt(process.env.RELAY_EXPRESS_PORT, 10)
+	: 9101;
+const relayPort = process.env.RELAY_PORT
+	? parseInt(process.env.RELAY_PORT, 10)
+	: 9001;
+const announce = process.env.RELAY_ANNOUNCE ? [process.env.RELAY_ANNOUNCE] : [];
+
+if (announce.length > 0) {
+	console.log(`Announcing on ${announce.join(", ")}`);
+}
+const listenAddr = [`/ip4/0.0.0.0/tcp/${relayPort}/ws`];
+
+console.log("Relays libp2p node listens on ", listenAddr);
 
 async function main() {
 	const libp2p = await createLibp2p({
 		addresses: {
-			listen: ["/ip4/0.0.0.0/tcp/9001/ws", "/ip4/0.0.0.0/tcp/9002"],
-			noAnnounce: ["/ip4/127.0.0.1/tcp/9001/ws"],
+			listen: listenAddr,
+			announce: [...(announce ?? []), ...listenAddr],
 		},
 		transports: [webSockets(), tcp()],
 		connectionEncrypters: [noise()],
@@ -68,7 +81,7 @@ async function main() {
 				message,
 			);
 			const { sendText } = await chatProtocol.attachChat(peerId);
-			sendText("Hello from relay server!");
+			sendText(`Bouncing your message: '${message}'`);
 		},
 	});
 
@@ -96,4 +109,4 @@ async function main() {
 }
 
 main();
-initHttpService();
+initHttpService({ port: expressPort });
